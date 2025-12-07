@@ -1,0 +1,45 @@
+# Unreal Engine
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/
+!Build/Config/
+!Build/Scripts/
+*.uprojectdirs
+
+# Asset DDC
+*_BuiltData.uasset
+
+# Visual Studio
+.vs/
+*.sln
+*.suo
+*.user
+*.userprefs
+*.opensdf
+*.sdf
+*.VC.db
+*.opendb
+
+# Compiled binaries
+*.exe
+*.dll
+*.pdb
+*.obj
+*.lib
+*.exp
+
+# Mac and Xcode
+*.DS_Store
+*.xcodeproj
+*.xcworkspace
+
+# Logs
+*.log
+
+# Backup files
+*.bak
+
+# Generated project files
+*.code-workspace
