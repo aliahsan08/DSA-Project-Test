@@ -12,6 +12,7 @@
 #include "InventoryComponent.h" 
 #include "dsaprojectGameMode.h" 
 #include "DSAManagerComponent.h"
+#include "DSAGameInstance.h" // Needed for Saving
 #include "Kismet/GameplayStatics.h" 
 
 DEFINE_LOG_CATEGORY_STATIC(SideScrollerCharacter, Log, All);
@@ -80,13 +81,26 @@ void AdsaprojectCharacter::Tick(float DeltaSeconds)
 
 void AdsaprojectCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
-	// STANDARD INPUTS RESTORED
+	// Standard Controls
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AdsaprojectCharacter::MoveRight);
 
 	PlayerInputComponent->BindTouch(IE_Pressed, this, &AdsaprojectCharacter::TouchStarted);
 	PlayerInputComponent->BindTouch(IE_Released, this, &AdsaprojectCharacter::TouchStopped);
+
+	// --- SAVE BINDING (Spacebar) ---
+	PlayerInputComponent->BindAction("SaveGame", IE_Pressed, this, &AdsaprojectCharacter::ManualSave);
+}
+
+void AdsaprojectCharacter::ManualSave()
+{
+	UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
+	if (GI)
+	{
+		GI->SaveState();
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("GAME SAVED!"));
+	}
 }
 
 void AdsaprojectCharacter::MoveRight(float Value)
@@ -108,6 +122,19 @@ void AdsaprojectCharacter::UpdateCharacter()
 {
 	UpdateAnimation();
 
+	// Undo Stack Logic (DSA)
+	AdsaprojectGameMode* GameMode = Cast<AdsaprojectGameMode>(UGameplayStatics::GetGameMode(GetWorld()));
+	if (GameMode && GameMode->DSAManager)
+	{
+		if (FMath::Fmod(GetWorld()->GetTimeSeconds(), 0.5f) < GetWorld()->GetDeltaSeconds())
+		{
+			FAction NewAction;
+			NewAction.ActionDescription = "Movement Checkpoint";
+			NewAction.PlayerLocation = GetActorLocation();
+			GameMode->DSAManager->PushAction(NewAction);
+		}
+	}
+
 	const FVector PlayerVelocity = GetVelocity();
 	float TravelDirection = PlayerVelocity.X;
 	if (Controller != nullptr)
@@ -126,14 +153,14 @@ void AdsaprojectCharacter::UpdateCharacter()
 void AdsaprojectCharacter::DieAndRespawn()
 {
 	APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-	if (PC)
-	{
-		DisableInput(PC);
-	}
+	if (PC) DisableInput(PC);
+
 	SetActorHiddenInGame(true);
+
 	AdsaprojectGameMode* GameMode = Cast<AdsaprojectGameMode>(UGameplayStatics::GetGameMode(GetWorld()));
 	if (GameMode)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Player died, calling GameMode::RespawnPlayer."));
 		GameMode->RespawnPlayer(this);
 	}
 }

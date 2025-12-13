@@ -3,12 +3,13 @@
 #include "BossPawn.h"
 #include "MinimaxSolver.h"
 #include "Kismet/GameplayStatics.h"
+#include "DSAGameInstance.h" // Needed for Coin Count
 
 ABossManager::ABossManager()
 {
     PrimaryActorTick.bCanEverTick = false;
     PlayerHP = 100;
-    BossHP = 200;
+    BossHP = 100;
     bIsBusy = false;
 
     bPlayerCharged = false;
@@ -46,6 +47,12 @@ void ABossManager::BeginPlay()
         }
     }
 
+    // Setup Inputs (U/I/O keys)
+    if (InputManager)
+    {
+        InputManager->SetupInputMode(EInputMode::EM_BattleMenu);
+    }
+
     LogToUI("BOSS BATTLE START! Press U (Attack), I (Defend), O (Charge)");
 }
 
@@ -66,10 +73,10 @@ void ABossManager::ExecuteTurn(EBattleAction PlayerAction)
     PendingPlayerAction = PlayerAction;
 
     // Step 1: Player acts immediately
-    Sequence_PlayerAction();
+    Sequence_PlayerAttack();
 }
 
-void ABossManager::Sequence_PlayerAction()
+void ABossManager::Sequence_PlayerAttack()
 {
     if (BattlePlayerRef)
     {
@@ -81,32 +88,7 @@ void ABossManager::Sequence_PlayerAction()
     ActionText.RemoveFromStart("EBattleAction::");
     LogToUI(FString::Printf(TEXT("You chose to %s!"), *ActionText));
 
-    if (PendingPlayerAction == EBattleAction::Attack)
-    {
-        // Apply Player Damage NOW
-        int32 Dmg = FMinimaxSolver::CalculateDamage(PendingPlayerAction, EBattleAction::None, true, bPlayerCharged, bBossDefending);
-
-        if (Dmg > 0) LogToUI(FString::Printf(TEXT(" -> Boss took %d damage!"), Dmg));
-        else if (bBossDefending && !bPlayerCharged) LogToUI(" -> Boss BLOCKED the attack!");
-
-        BossHP = FMath::Max(0, BossHP - Dmg);
-        if (bPlayerCharged) { bPlayerCharged = false; }
-    }
-    else if (PendingPlayerAction == EBattleAction::Charge)
-    {
-        LogToUI(" -> You assume a charging stance!");
-    }
-    else if (PendingPlayerAction == EBattleAction::Defend)
-    {
-        LogToUI(" -> You raise your guard!");
-    }
-
-    if (BossHP <= 0)
-    {
-        EndBattle(true);
-        return;
-    }
-
+    // Wait before Boss reacts
     GetWorldTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_BossDecision, 2.0f, false);
 }
 
@@ -116,6 +98,7 @@ void ABossManager::Sequence_BossDecision()
     CurrentState.PlayerHP = PlayerHP;
     CurrentState.BossHP = BossHP;
     CurrentState.LastPlayerAction = PendingPlayerAction;
+    // Pass persistent states into AI
     CurrentState.bPlayerDefending = bPlayerDefending;
     CurrentState.bBossDefending = bBossDefending;
     CurrentState.bPlayerCharged = bPlayerCharged;
@@ -139,43 +122,98 @@ void ABossManager::Sequence_BossAction()
         else if (PendingBossAction == EBattleAction::Defend) BossPawnRef->PlayDefend();
     }
 
-    if (PendingBossAction == EBattleAction::Attack)
-    {
-        bool bPlayerIsGuardingNow = (PendingPlayerAction == EBattleAction::Defend);
-
-        int32 Dmg = FMinimaxSolver::CalculateDamage(PendingBossAction, EBattleAction::None, false, bBossCharged, bPlayerIsGuardingNow);
-
-        if (Dmg > 0) LogToUI(FString::Printf(TEXT(" -> You took %d damage!"), Dmg));
-        else if (bPlayerIsGuardingNow && !bBossCharged) LogToUI(" -> You BLOCKED the attack!");
-
-        PlayerHP = FMath::Max(0, PlayerHP - Dmg);
-        if (bBossCharged) { bBossCharged = false; }
-    }
-    else if (PendingBossAction == EBattleAction::Charge)
-    {
-        LogToUI(" -> Boss is charging power!");
-    }
-
-    if (PlayerHP <= 0)
-    {
-        EndBattle(false);
-        return;
-    }
-
     GetWorldTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_ResolveTurn, 2.0f, false);
 }
 
 void ABossManager::Sequence_ResolveTurn()
 {
-    // Update Flags for NEXT turn
-    bPlayerDefending = (PendingPlayerAction == EBattleAction::Defend);
-    bBossDefending = (PendingBossAction == EBattleAction::Defend);
+    // 1. CALCULATE DAMAGE (Using Local Function for Coin Logic)
+    int32 DmgToBoss = CalculateDamageInternal(PendingPlayerAction, PendingBossAction, true);
+    int32 DmgToPlayer = CalculateDamageInternal(PendingBossAction, PendingPlayerAction, false);
 
-    if (PendingPlayerAction == EBattleAction::Charge) bPlayerCharged = true;
-    if (PendingBossAction == EBattleAction::Charge) bBossCharged = true;
+    // 2. APPLY DAMAGE
+    BossHP = FMath::Max(0, BossHP - DmgToBoss);
+    PlayerHP = FMath::Max(0, PlayerHP - DmgToPlayer);
 
-    bIsBusy = false;
-    LogToUI("Your Turn...");
+    LogToUI(FString::Printf(TEXT("Result: You took %d dmg. Boss took %d dmg."), DmgToPlayer, DmgToBoss));
+
+    // 3. UPDATE STATES FOR NEXT TURN
+    ApplyActionLogic(PendingPlayerAction, false);
+    ApplyActionLogic(PendingBossAction, true);
+
+    if (PlayerHP <= 0 || BossHP <= 0)
+    {
+        EndBattle(BossHP <= 0);
+    }
+    else
+    {
+        bIsBusy = false;
+        LogToUI("Your Turn...");
+    }
+}
+
+void ABossManager::ApplyActionLogic(EBattleAction Action, bool bIsBossTurn)
+{
+    bool* ActorDefending = bIsBossTurn ? &bBossDefending : &bPlayerDefending;
+    bool* ActorCharged = bIsBossTurn ? &bBossCharged : &bPlayerCharged;
+
+    *ActorDefending = (Action == EBattleAction::Defend);
+
+    if (Action == EBattleAction::Charge)
+    {
+        *ActorCharged = true;
+        LogToUI(bIsBossTurn ? "Boss is charging up!" : "You are charging up!");
+    }
+    else if (Action == EBattleAction::Attack)
+    {
+        if (*ActorCharged)
+        {
+            *ActorCharged = false;
+            LogToUI(bIsBossTurn ? "Boss unleashed Charge!" : "You unleashed Charge!");
+        }
+    }
+
+    if (ActiveBattleWidget) ActiveBattleWidget->UpdateHP(PlayerHP, BossHP);
+}
+
+int32 ABossManager::CalculateDamageInternal(EBattleAction AttackerAction, EBattleAction DefenderAction, bool bIsPlayerAttacking)
+{
+    float Damage = 0.0f;
+    float Multiplier = 1.0f;
+
+    // --- COIN LOGIC: Base attack 20 + Total Coins ---
+    float ActualBaseDamage = 20.0f;
+
+    if (bIsPlayerAttacking)
+    {
+        UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
+        if (GI)
+        {
+            ActualBaseDamage = 20.0f + (float)GI->TotalGlobalCoins;
+            UE_LOG(LogTemp, Log, TEXT("Player Attack Power: %f (Coins: %d)"), ActualBaseDamage, GI->TotalGlobalCoins);
+        }
+    }
+    // --------------------------------
+
+    if (AttackerAction == EBattleAction::Charge) Multiplier = 1.5f;
+    else if (AttackerAction == EBattleAction::Attack) Multiplier = 1.0f;
+    else return 0;
+
+    Damage = ActualBaseDamage * Multiplier;
+
+    // Check Guard logic (State from Previous Turn)
+    bool bIsDefenderGuarding = (bIsPlayerAttacking ? bBossDefending : bPlayerDefending);
+    bool bIsAttackerCharged = (bIsPlayerAttacking ? bPlayerCharged : bBossCharged);
+
+    if (bIsDefenderGuarding)
+    {
+        // Shield Break Logic: Charge breaks shield, Normal attack gets blocked
+        if (!bIsAttackerCharged) Damage = 0.0f;
+    }
+
+    if (!bIsPlayerAttacking) Damage *= 0.8f; // Boss deals less damage
+
+    return FMath::Max(0, FMath::RoundToInt(Damage));
 }
 
 void ABossManager::EndBattle(bool bPlayerWon)

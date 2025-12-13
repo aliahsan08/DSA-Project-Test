@@ -37,6 +37,9 @@ protected:
 	void TouchStarted(const ETouchIndex::Type FingerIndex, const FVector Location);
 	void TouchStopped(const ETouchIndex::Type FingerIndex, const FVector Location);
 
+	// --- SAVE FUNCTION ---
+	void ManualSave();
+
 	virtual void SetupPlayerInputComponent(class UInputComponent* InputComponent) override;
 
 public:
@@ -44,9 +47,8 @@ public:
 
 	void DieAndRespawn();
 
-	// --- MOVED TO PUBLIC FOR GameInputComponent ACCESS ---
+	// Public so GameInputComponent can call it if needed
 	void MoveRight(float Value);
-	// ----------------------------------------------------
 
 	FORCEINLINE class UCameraComponent* GetSideViewCameraComponent() const { return SideViewCameraComponent; }
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }

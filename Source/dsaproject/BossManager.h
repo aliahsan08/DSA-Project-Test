@@ -51,7 +51,7 @@ private:
     bool bIsBusy;
     EBattleAction PendingPlayerAction;
     EBattleAction PendingBossAction;
-    FTimerHandle BattleSequenceTimer; // Renamed to match CPP usage
+    FTimerHandle BattleSequenceTimer;
 
     // State flags for next turn calculations
     bool bPlayerCharged;
@@ -61,12 +61,13 @@ private:
 
     void LogToUI(const FString& Message);
 
-    // -- SEQUENCE STEPS (Unified Names) --
-    void Sequence_PlayerAction();
+    // -- SEQUENCE STEPS --
+    void Sequence_PlayerAttack();
     void Sequence_BossDecision();
     void Sequence_BossAction();
     void Sequence_ResolveTurn();
     void EndBattle(bool bPlayerWon);
 
     void ApplyActionLogic(EBattleAction Action, bool bIsBossTurn);
+    int32 CalculateDamageInternal(EBattleAction AttackerAction, EBattleAction DefenderAction, bool bIsPlayerAttacking);
 };

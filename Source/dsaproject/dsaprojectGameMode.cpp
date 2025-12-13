@@ -1,75 +1,100 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "dsaprojectGameMode.h"
 #include "dsaprojectCharacter.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
 #include "DSAManagerComponent.h" 
+#include "DSAGameInstance.h"
+#include "CircuitManager.h" // Needed for Puzzle Condition
 
 AdsaprojectGameMode::AdsaprojectGameMode()
 {
-	// Set default pawn class to our character
-	DefaultPawnClass = AdsaprojectCharacter::StaticClass();
-	CurrentScore = 0;
+    DefaultPawnClass = AdsaprojectCharacter::StaticClass();
+    PrimaryActorTick.bCanEverTick = true; // Enable Tick for Timer
 
-	// Initialize the DSA Manager Component
-	DSAManager = CreateDefaultSubobject<UDSAManagerComponent>(TEXT("DSAManagerComponent"));
+    DSAManager = CreateDefaultSubobject<UDSAManagerComponent>(TEXT("DSAManagerComponent"));
+
+    CurrentScore = 700;
+    CoinsCollectedInLevel = 0;
+    TimeElapsed = 0.0f;
 }
 
 void AdsaprojectGameMode::BeginPlay()
 {
-	Super::BeginPlay();
-
-	// Find a PlayerStart for the initial spawn location
-	AActor* PlayerStart = UGameplayStatics::GetActorOfClass(GetWorld(), APlayerStart::StaticClass());
-	if (PlayerStart)
-	{
-		SpawnLocation = PlayerStart->GetActorLocation();
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("GameMode Initialized. Score: %d"), CurrentScore);
+    Super::BeginPlay();
+    AActor* PlayerStart = UGameplayStatics::GetActorOfClass(GetWorld(), APlayerStart::StaticClass());
+    if (PlayerStart) SpawnLocation = PlayerStart->GetActorLocation();
 }
 
-void AdsaprojectGameMode::RespawnPlayer(AdsaprojectCharacter* DeadPlayer)
+void AdsaprojectGameMode::Tick(float DeltaTime)
 {
-	if (DeadPlayer)
-	{
-		// Teleport player back to the spawn location
-		DeadPlayer->SetActorLocation(SpawnLocation);
-		DeadPlayer->SetActorRotation(FRotator::ZeroRotator);
+    Super::Tick(DeltaTime);
 
-		// Re-enable player controls
-		APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-		if (PC)
-		{
-			DeadPlayer->EnableInput(PC);
-			DeadPlayer->SetActorHiddenInGame(false);
-		}
+    TimeElapsed += DeltaTime;
 
-		UE_LOG(LogTemp, Warning, TEXT("Player Respawned."));
-	}
-}
+    // Score Logic: Drops by 10 every second
+    int32 TimePenalty = FMath::FloorToInt(TimeElapsed) * 10;
 
-void AdsaprojectGameMode::FinishLevel(AdsaprojectCharacter* Player)
-{
-	if (Player)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("LEVEL COMPLETE! Final Score: %d"), CurrentScore);
+    // Logic: At 60 seconds (1 min), drop by 600 (handled by formula: 60 * 10 = 600)
+    // Constraint: Minimum score before coins is 100
+    int32 RawScore = BaseScore - TimePenalty;
 
-		// DSA: Use the Score Tree (BST) for Player Progression
-		if (DSAManager)
-		{
-			// Generate a dummy name or use PlayerState name
-			FString PlayerName = FString::Printf(TEXT("Player_%d"), FMath::RandRange(100, 999));
-			DSAManager->InsertScore(PlayerName, CurrentScore);
-		}
+    // If timer hits a minute (60s), RawScore is 100. If it goes below, clamp to 100.
+    if (RawScore < 100)
+    {
+        RawScore = 100;
+    }
 
-		// Logic to load next level would go here
-	}
+    // Add Coins (100 per coin)
+    CurrentScore = RawScore + (CoinsCollectedInLevel * 100);
 }
 
 void AdsaprojectGameMode::AddScore(int32 ScoreToAdd)
 {
-	CurrentScore += ScoreToAdd;
-	UE_LOG(LogTemp, Log, TEXT("Score Updated: %d (+%d)"), CurrentScore, ScoreToAdd);
+    // In this specific rule set, "ScoreToAdd" is the coin value (usually 1)
+    // We track total coins separately to calculate the bonus
+    CoinsCollectedInLevel += ScoreToAdd;
+}
+
+void AdsaprojectGameMode::RespawnPlayer(AdsaprojectCharacter* DeadPlayer)
+{
+    if (DeadPlayer)
+    {
+        // REQUIREMENT: "Actions get popped" -> Clear History
+        if (DSAManager) DSAManager->ClearHistory();
+
+        // REQUIREMENT: "Everything respawns" -> Restart Level
+        FString CurrentLevelName = GetWorld()->GetMapName();
+        CurrentLevelName.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
+        UGameplayStatics::OpenLevel(GetWorld(), FName(*CurrentLevelName));
+    }
+}
+
+void AdsaprojectGameMode::FinishLevel(AdsaprojectCharacter* Player)
+{
+    // --- PUZZLE LEVEL CONDITION CHECK (Wires Fixed) ---
+    // We check if a CircuitManager exists. If so, we are in the puzzle level.
+    ACircuitManager* CircuitMgr = Cast<ACircuitManager>(UGameplayStatics::GetActorOfClass(GetWorld(), ACircuitManager::StaticClass()));
+    if (CircuitMgr)
+    {
+        // If Circuit Manager exists, we MUST solve it to pass
+        if (!CircuitMgr->IsCircuitComplete())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Level Finished Failed: Circuit not complete!"));
+            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Locked! Fix the Wires first."));
+            return; // Door is locked
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("LEVEL COMPLETE! Final Score: %d"), CurrentScore);
+
+    // Save Data to GameInstance and Move On
+    UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
+    if (GI)
+    {
+        // Add score to leaderboard
+        if (DSAManager) DSAManager->AddScore(GI->CurrentProfileName, CurrentScore);
+
+        // Pass data and transition
+        GI->CompleteLevel(CurrentScore, CoinsCollectedInLevel);
+    }
 }
