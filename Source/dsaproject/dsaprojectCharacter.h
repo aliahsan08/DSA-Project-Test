@@ -37,8 +37,7 @@ protected:
 	void TouchStarted(const ETouchIndex::Type FingerIndex, const FVector Location);
 	void TouchStopped(const ETouchIndex::Type FingerIndex, const FVector Location);
 
-	// --- SAVE FUNCTION ---
-	void ManualSave();
+	void ReturnToMainMenu();
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* InputComponent) override;
 

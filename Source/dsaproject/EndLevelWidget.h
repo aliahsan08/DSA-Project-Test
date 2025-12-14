@@ -21,9 +21,16 @@ public:
     UPROPERTY(meta = (BindWidget))
         UButton* Btn_NextLevel;
 
+    // NEW: Save Button
+    UPROPERTY(meta = (BindWidget))
+        UButton* Btn_Save;
+
     virtual void NativeConstruct() override;
 
 private:
     UFUNCTION()
         void OnNextLevelClicked();
+
+    UFUNCTION()
+        void OnSaveClicked();
 };

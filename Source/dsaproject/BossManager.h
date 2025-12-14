@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "MinimaxSolver.h"
-#include "GameInputComponent.h"
 #include "BattleWidget.h"
 #include "BossManager.generated.h"
 
@@ -29,14 +28,7 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Battle Stats")
         int32 BossHP;
 
-    UPROPERTY(EditAnywhere, Category = "UI")
-        TSubclassOf<UBattleWidget> BattleWidgetClass;
-
-    UPROPERTY()
-        UBattleWidget* ActiveBattleWidget;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Input")
-        UGameInputComponent* InputManager;
+    // --- REMOVED: UGameInputComponent* InputManager; ---
 
     // --- References to Actors ---
     UPROPERTY()
@@ -45,23 +37,38 @@ public:
     UPROPERTY()
         ABossPawn* BossPawnRef;
 
+    // --- UI CONFIGURATION ---
+    // The Battle Menu (Attack/Defend buttons)
+    UPROPERTY(EditAnywhere, Category = "UI")
+        TSubclassOf<UBattleWidget> BattleWidgetClass;
+
+    // The Score Screen (Next Level button)
+    UPROPERTY(EditAnywhere, Category = "UI")
+        TSubclassOf<UUserWidget> EndLevelWidgetClass;
+
+    UPROPERTY()
+        UBattleWidget* ActiveBattleWidget;
+
+    // Entry point for player input
     void ExecuteTurn(EBattleAction PlayerAction);
 
 private:
+    // --- State Variables ---
     bool bIsBusy;
     EBattleAction PendingPlayerAction;
     EBattleAction PendingBossAction;
     FTimerHandle BattleSequenceTimer;
 
-    // State flags for next turn calculations
+    // Combat State Flags
     bool bPlayerCharged;
     bool bBossCharged;
     bool bPlayerDefending;
     bool bBossDefending;
 
+    // --- Helper Functions ---
     void LogToUI(const FString& Message);
 
-    // -- SEQUENCE STEPS --
+    // --- Sequence Steps ---
     void Sequence_PlayerAttack();
     void Sequence_BossDecision();
     void Sequence_BossAction();

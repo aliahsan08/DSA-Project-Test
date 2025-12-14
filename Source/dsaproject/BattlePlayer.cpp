@@ -40,9 +40,20 @@ void ABattlePlayer::BeginPlay()
 void ABattlePlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+    // 1. Battle Controls
     PlayerInputComponent->BindKey(EKeys::U, IE_Pressed, this, &ABattlePlayer::InputAttack);
     PlayerInputComponent->BindKey(EKeys::I, IE_Pressed, this, &ABattlePlayer::InputDefend);
     PlayerInputComponent->BindKey(EKeys::O, IE_Pressed, this, &ABattlePlayer::InputCharge);
+
+    // 2. Global System Controls
+    // Escape to Main Menu (Added as requested)
+    PlayerInputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &ABattlePlayer::ReturnToMainMenu);
+}
+
+void ABattlePlayer::ReturnToMainMenu()
+{
+    UGameplayStatics::OpenLevel(GetWorld(), FName("MainMenu"));
 }
 
 void ABattlePlayer::InputAttack()

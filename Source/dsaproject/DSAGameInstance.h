@@ -22,18 +22,19 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Data")
         int32 TotalGlobalCoins;
 
-    // --- SAVE / LOAD SYSTEM ---
+    // Returns FALSE if name is taken
     UFUNCTION(BlueprintCallable, Category = "SaveSystem")
-        void CreateNewGame(FString PlayerName);
+        bool CreateNewGame(FString PlayerName);
 
     UFUNCTION(BlueprintCallable, Category = "SaveSystem")
         bool LoadGame(FString SlotName);
 
     UFUNCTION(BlueprintCallable, Category = "SaveSystem")
-        void SaveState(); // Saves current progress
+        void SaveState();
 
-        // --- LEVEL MANAGEMENT ---
+    // Updates data but DOES NOT save to disk immediately
     void CompleteLevel(int32 LevelScore, int32 LevelCoins);
+
     void OpenNextLevel();
 
     UFUNCTION(BlueprintCallable)

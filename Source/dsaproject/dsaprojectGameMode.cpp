@@ -4,12 +4,12 @@
 #include "GameFramework/PlayerStart.h"
 #include "DSAManagerComponent.h" 
 #include "DSAGameInstance.h"
-#include "CircuitManager.h" // Needed for Puzzle Condition
+#include "CircuitManager.h" 
 
 AdsaprojectGameMode::AdsaprojectGameMode()
 {
     DefaultPawnClass = AdsaprojectCharacter::StaticClass();
-    PrimaryActorTick.bCanEverTick = true; // Enable Tick for Timer
+    PrimaryActorTick.bCanEverTick = true;
 
     DSAManager = CreateDefaultSubobject<UDSAManagerComponent>(TEXT("DSAManagerComponent"));
 
@@ -23,6 +23,17 @@ void AdsaprojectGameMode::BeginPlay()
     Super::BeginPlay();
     AActor* PlayerStart = UGameplayStatics::GetActorOfClass(GetWorld(), APlayerStart::StaticClass());
     if (PlayerStart) SpawnLocation = PlayerStart->GetActorLocation();
+
+    // --- CRITICAL FIX 1: RESET INPUT TO GAMEPLAY ---
+    // When coming from the Main Menu (which is UI Only), the controller is stuck.
+    // We force it back to Game Only so WASD/Arrows work.
+    APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+    if (PC)
+    {
+        FInputModeGameOnly GameInput;
+        PC->SetInputMode(GameInput);
+        PC->bShowMouseCursor = false; // Hide mouse for gameplay
+    }
 }
 
 void AdsaprojectGameMode::Tick(float DeltaTime)
@@ -31,27 +42,18 @@ void AdsaprojectGameMode::Tick(float DeltaTime)
 
     TimeElapsed += DeltaTime;
 
-    // Score Logic: Drops by 10 every second
     int32 TimePenalty = FMath::FloorToInt(TimeElapsed) * 10;
-
-    // Logic: At 60 seconds (1 min), drop by 600 (handled by formula: 60 * 10 = 600)
-    // Constraint: Minimum score before coins is 100
     int32 RawScore = BaseScore - TimePenalty;
-
-    // If timer hits a minute (60s), RawScore is 100. If it goes below, clamp to 100.
-    if (RawScore < 100)
+    if (TimeElapsed >= 60.0f || RawScore < 100)
     {
         RawScore = 100;
     }
 
-    // Add Coins (100 per coin)
     CurrentScore = RawScore + (CoinsCollectedInLevel * 100);
 }
 
 void AdsaprojectGameMode::AddScore(int32 ScoreToAdd)
 {
-    // In this specific rule set, "ScoreToAdd" is the coin value (usually 1)
-    // We track total coins separately to calculate the bonus
     CoinsCollectedInLevel += ScoreToAdd;
 }
 
@@ -59,10 +61,8 @@ void AdsaprojectGameMode::RespawnPlayer(AdsaprojectCharacter* DeadPlayer)
 {
     if (DeadPlayer)
     {
-        // REQUIREMENT: "Actions get popped" -> Clear History
         if (DSAManager) DSAManager->ClearHistory();
 
-        // REQUIREMENT: "Everything respawns" -> Restart Level
         FString CurrentLevelName = GetWorld()->GetMapName();
         CurrentLevelName.RemoveFromStart(GetWorld()->StreamingLevelsPrefix);
         UGameplayStatics::OpenLevel(GetWorld(), FName(*CurrentLevelName));
@@ -71,30 +71,52 @@ void AdsaprojectGameMode::RespawnPlayer(AdsaprojectCharacter* DeadPlayer)
 
 void AdsaprojectGameMode::FinishLevel(AdsaprojectCharacter* Player)
 {
-    // --- PUZZLE LEVEL CONDITION CHECK (Wires Fixed) ---
-    // We check if a CircuitManager exists. If so, we are in the puzzle level.
+    // Puzzle Check
     ACircuitManager* CircuitMgr = Cast<ACircuitManager>(UGameplayStatics::GetActorOfClass(GetWorld(), ACircuitManager::StaticClass()));
     if (CircuitMgr)
     {
-        // If Circuit Manager exists, we MUST solve it to pass
         if (!CircuitMgr->IsCircuitComplete())
         {
             UE_LOG(LogTemp, Warning, TEXT("Level Finished Failed: Circuit not complete!"));
-            if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Red, TEXT("Locked! Fix the Wires first."));
-            return; // Door is locked
+            return;
         }
     }
 
     UE_LOG(LogTemp, Warning, TEXT("LEVEL COMPLETE! Final Score: %d"), CurrentScore);
 
-    // Save Data to GameInstance and Move On
+    // Save Data
     UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
     if (GI)
     {
-        // Add score to leaderboard
         if (DSAManager) DSAManager->AddScore(GI->CurrentProfileName, CurrentScore);
 
-        // Pass data and transition
-        GI->CompleteLevel(CurrentScore, CoinsCollectedInLevel);
+        GI->TotalGlobalCoins += CoinsCollectedInLevel;
+        GI->CurrentLevelIndex++;
+
+        // REMOVED: GI->SaveState(); 
+        // We now wait for the user to press "Save" on the UI.
+    }
+
+    // --- CRITICAL FIX 2: SPAWN END MENU & ENABLE MOUSE ---
+    if (EndLevelWidgetClass)
+    {
+        APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+        if (PC)
+        {
+            UUserWidget* EndWidget = CreateWidget<UUserWidget>(PC, EndLevelWidgetClass);
+            if (EndWidget)
+            {
+                EndWidget->AddToViewport();
+
+                // Switch Input to UI so the player can click "Next Level"
+                PC->bShowMouseCursor = true;
+                FInputModeUIOnly UIInput;
+                UIInput.SetWidgetToFocus(EndWidget->TakeWidget());
+                PC->SetInputMode(UIInput);
+
+                // Pause game logic (optional, stops timer)
+                // UGameplayStatics::SetGamePaused(GetWorld(), true);
+            }
+        }
     }
 }

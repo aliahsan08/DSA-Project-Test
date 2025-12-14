@@ -3,9 +3,8 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
-// CRITICAL FIX: Changed from EditableTextBox.h to EditableText.h
-#include "Components/EditableText.h" 
-#include "Components/VerticalBox.h"
+#include "Components/EditableTextBox.h" 
+#include "Components/TextBlock.h" 
 #include "MainMenuWidget.generated.h"
 
 UCLASS()
@@ -14,10 +13,8 @@ class DSAPROJECT_API UMainMenuWidget : public UUserWidget
     GENERATED_BODY()
 
 public:
-    // --- UI BINDINGS ---
-    // Matches the "Editable Text" widget in your UMG Designer
     UPROPERTY(meta = (BindWidget))
-        UEditableText* Input_PlayerName;
+        UEditableTextBox* Input_PlayerName;
 
     UPROPERTY(meta = (BindWidget))
         UButton* Btn_NewGame;
@@ -26,21 +23,14 @@ public:
         UButton* Btn_LoadGame;
 
     UPROPERTY(meta = (BindWidget))
-        UVerticalBox* VBox_SaveSlots;
+        UTextBlock* Txt_ErrorMsg;
 
-    // --- CONFIG ---
-    UPROPERTY(EditAnywhere, Category = "Setup")
-        TSubclassOf<UUserWidget> SaveSlotClass;
-
-    // --- LOGIC ---
     virtual void NativeConstruct() override;
-
-    void LoadSpecificSlot(FString SlotName);
 
 private:
     UFUNCTION()
         void OnNewGameClicked();
 
     UFUNCTION()
-        void OnLoadGameListClicked();
+        void OnLoadGameClicked(); // Renamed logic
 };

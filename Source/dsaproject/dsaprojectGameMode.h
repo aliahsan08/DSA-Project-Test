@@ -2,7 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "MySaveGame.h" // For FLevelScore struct
+#include "MySaveGame.h" 
+#include "Blueprint/UserWidget.h" // Required for CreateWidget
 #include "dsaprojectGameMode.generated.h"
 
 class AdsaprojectCharacter;
@@ -27,6 +28,11 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "Enemies")
         TSet<AEnemyMonster*> ActiveEnemies;
 
+    // --- UI CONFIG ---
+    // Assign WBP_EndLevel here in the Editor
+    UPROPERTY(EditAnywhere, Category = "UI")
+        TSubclassOf<UUserWidget> EndLevelWidgetClass;
+
     // --- SCORING SYSTEM ---
     int32 BaseScore = 700;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -37,5 +43,5 @@ public:
 
     void RespawnPlayer(AdsaprojectCharacter* DeadPlayer);
     void FinishLevel(AdsaprojectCharacter* Player);
-    void AddScore(int32 ScoreToAdd); // Actually adds coins
+    void AddScore(int32 ScoreToAdd);
 };

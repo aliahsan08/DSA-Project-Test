@@ -4,20 +4,22 @@
 #include "MinimaxSolver.h"
 #include "Kismet/GameplayStatics.h"
 #include "DSAGameInstance.h" // Needed for Coin Count
+#include "Blueprint/UserWidget.h" // For CreateWidget
 
 ABossManager::ABossManager()
 {
     PrimaryActorTick.bCanEverTick = false;
     PlayerHP = 100;
-    BossHP = 100;
+    BossHP = 200;
     bIsBusy = false;
 
+    // Initialize State Flags
     bPlayerCharged = false;
     bBossCharged = false;
     bPlayerDefending = false;
     bBossDefending = false;
 
-    InputManager = CreateDefaultSubobject<UGameInputComponent>(TEXT("InputManager"));
+    // --- REMOVED: InputManager creation ---
 }
 
 void ABossManager::BeginPlay()
@@ -28,7 +30,7 @@ void ABossManager::BeginPlay()
     BattlePlayerRef = Cast<ABattlePlayer>(UGameplayStatics::GetPlayerPawn(GetWorld(), 0));
     BossPawnRef = Cast<ABossPawn>(UGameplayStatics::GetActorOfClass(GetWorld(), ABossPawn::StaticClass()));
 
-    // 2. Create UI
+    // 2. Create Battle UI
     if (BattleWidgetClass)
     {
         APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
@@ -47,11 +49,7 @@ void ABossManager::BeginPlay()
         }
     }
 
-    // Setup Inputs (U/I/O keys)
-    if (InputManager)
-    {
-        InputManager->SetupInputMode(EInputMode::EM_BattleMenu);
-    }
+    // --- REMOVED: InputManager Setup ---
 
     LogToUI("BOSS BATTLE START! Press U (Attack), I (Defend), O (Charge)");
 }
@@ -72,7 +70,7 @@ void ABossManager::ExecuteTurn(EBattleAction PlayerAction)
     bIsBusy = true;
     PendingPlayerAction = PlayerAction;
 
-    // Step 1: Player acts immediately
+    // Step 1: Start Sequence
     Sequence_PlayerAttack();
 }
 
@@ -89,7 +87,10 @@ void ABossManager::Sequence_PlayerAttack()
     LogToUI(FString::Printf(TEXT("You chose to %s!"), *ActionText));
 
     // Wait before Boss reacts
-    GetWorldTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_BossDecision, 2.0f, false);
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_BossDecision, 2.0f, false);
+    }
 }
 
 void ABossManager::Sequence_BossDecision()
@@ -107,7 +108,10 @@ void ABossManager::Sequence_BossDecision()
     PendingBossAction = FMinimaxSolver::FindBestAction(CurrentState);
     LogToUI("The Boss is reacting...");
 
-    GetWorldTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_BossAction, 0.5f, false);
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_BossAction, 0.5f, false);
+    }
 }
 
 void ABossManager::Sequence_BossAction()
@@ -122,7 +126,10 @@ void ABossManager::Sequence_BossAction()
         else if (PendingBossAction == EBattleAction::Defend) BossPawnRef->PlayDefend();
     }
 
-    GetWorldTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_ResolveTurn, 2.0f, false);
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(BattleSequenceTimer, this, &ABossManager::Sequence_ResolveTurn, 2.0f, false);
+    }
 }
 
 void ABossManager::Sequence_ResolveTurn()
@@ -193,7 +200,6 @@ int32 ABossManager::CalculateDamageInternal(EBattleAction AttackerAction, EBattl
             UE_LOG(LogTemp, Log, TEXT("Player Attack Power: %f (Coins: %d)"), ActualBaseDamage, GI->TotalGlobalCoins);
         }
     }
-    // --------------------------------
 
     if (AttackerAction == EBattleAction::Charge) Multiplier = 1.5f;
     else if (AttackerAction == EBattleAction::Attack) Multiplier = 1.0f;
@@ -222,9 +228,37 @@ void ABossManager::EndBattle(bool bPlayerWon)
     {
         LogToUI("VICTORY! Boss Defeated.");
         if (BossPawnRef) BossPawnRef->PlayDeath();
+
+        // Finalize Game in Save Data (Level 6 -> 7)
+        UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
+        if (GI)
+        {
+            GI->TotalGlobalCoins += 0;
+            GI->CurrentLevelIndex++;
+            GI->SaveState();
+        }
     }
     else
     {
         LogToUI("DEFEAT! Try again.");
     }
+
+    // --- SPAWN END LEVEL WIDGET ---
+    if (ActiveBattleWidget) ActiveBattleWidget->SetVisibility(ESlateVisibility::Hidden);
+
+    if (EndLevelWidgetClass)
+    {
+        APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+        if (PC)
+        {
+            UUserWidget* EndWidget = CreateWidget<UUserWidget>(PC, EndLevelWidgetClass);
+            if (EndWidget)
+            {
+                EndWidget->AddToViewport();
+                PC->bShowMouseCursor = true;
+                PC->SetInputMode(FInputModeUIOnly());
+            }
+        }
+    }
+    // Note: No automatic transition. The player must click "Next Level" (Main Menu) on the widget.
 }

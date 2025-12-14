@@ -12,7 +12,7 @@
 #include "InventoryComponent.h" 
 #include "dsaprojectGameMode.h" 
 #include "DSAManagerComponent.h"
-#include "DSAGameInstance.h" // Needed for Saving
+#include "DSAGameInstance.h" 
 #include "Kismet/GameplayStatics.h" 
 
 DEFINE_LOG_CATEGORY_STATIC(SideScrollerCharacter, Log, All);
@@ -81,7 +81,7 @@ void AdsaprojectCharacter::Tick(float DeltaSeconds)
 
 void AdsaprojectCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
 {
-	// Standard Controls
+	// 1. Standard Platformer Controls
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AdsaprojectCharacter::MoveRight);
@@ -89,18 +89,15 @@ void AdsaprojectCharacter::SetupPlayerInputComponent(class UInputComponent* Play
 	PlayerInputComponent->BindTouch(IE_Pressed, this, &AdsaprojectCharacter::TouchStarted);
 	PlayerInputComponent->BindTouch(IE_Released, this, &AdsaprojectCharacter::TouchStopped);
 
-	// --- SAVE BINDING (Spacebar) ---
-	PlayerInputComponent->BindAction("SaveGame", IE_Pressed, this, &AdsaprojectCharacter::ManualSave);
+	// 2. Global System Controls
+	// Save Game (Removed as requested - now handled by UI/EndLevel)
+	// Escape to Main Menu (Added as requested)
+	PlayerInputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AdsaprojectCharacter::ReturnToMainMenu);
 }
 
-void AdsaprojectCharacter::ManualSave()
+void AdsaprojectCharacter::ReturnToMainMenu()
 {
-	UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
-	if (GI)
-	{
-		GI->SaveState();
-		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("GAME SAVED!"));
-	}
+	UGameplayStatics::OpenLevel(GetWorld(), FName("MainMenu"));
 }
 
 void AdsaprojectCharacter::MoveRight(float Value)

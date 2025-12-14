@@ -46,7 +46,7 @@ protected:
     void InputAttack();
     void InputDefend();
     void InputCharge();
-
+    void ReturnToMainMenu();
     // Animation Helper
     void ReturnToIdle();
 
