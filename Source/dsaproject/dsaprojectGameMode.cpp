@@ -2,6 +2,8 @@
 #include "dsaprojectCharacter.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerStart.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "DSAManagerComponent.h" 
 #include "DSAGameInstance.h"
 #include "CircuitManager.h" 
@@ -14,6 +16,8 @@ AdsaprojectGameMode::AdsaprojectGameMode()
     DSAManager = CreateDefaultSubobject<UDSAManagerComponent>(TEXT("DSAManagerComponent"));
 
     CurrentScore = 700;
+    CompletedLevelIndex = 0;
+    bLevelFinished = false;
     CoinsCollectedInLevel = 0;
     TimeElapsed = 0.0f;
 }
@@ -23,6 +27,15 @@ void AdsaprojectGameMode::BeginPlay()
     Super::BeginPlay();
     AActor* PlayerStart = UGameplayStatics::GetActorOfClass(GetWorld(), APlayerStart::StaticClass());
     if (PlayerStart) SpawnLocation = PlayerStart->GetActorLocation();
+
+    // Load any persisted high scores into the in-level DSA manager
+    if (DSAManager)
+    {
+        if (UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance()))
+        {
+            DSAManager->Scoreboard = GI->HighScores;
+        }
+    }
 
     // --- CRITICAL FIX 1: RESET INPUT TO GAMEPLAY ---
     // When coming from the Main Menu (which is UI Only), the controller is stuck.
@@ -71,6 +84,12 @@ void AdsaprojectGameMode::RespawnPlayer(AdsaprojectCharacter* DeadPlayer)
 
 void AdsaprojectGameMode::FinishLevel(AdsaprojectCharacter* Player)
 {
+    // If we've already finished, ignore further calls (prevents double-trigger)
+    if (bLevelFinished)
+    {
+        return;
+    }
+
     // Puzzle Check
     ACircuitManager* CircuitMgr = Cast<ACircuitManager>(UGameplayStatics::GetActorOfClass(GetWorld(), ACircuitManager::StaticClass()));
     if (CircuitMgr)
@@ -82,13 +101,41 @@ void AdsaprojectGameMode::FinishLevel(AdsaprojectCharacter* Player)
         }
     }
 
+    // Mark level as finished so gameplay logic (death, etc.) should no longer run
+    bLevelFinished = true;
+
+    // Immediately stop player movement so they don't slide/fall after touching goal
+    if (Player)
+    {
+        if (UCharacterMovementComponent* MoveComp = Player->GetCharacterMovement())
+        {
+            MoveComp->StopMovementImmediately();
+            MoveComp->DisableMovement();
+        }
+
+        if (UCapsuleComponent* Capsule = Player->GetCapsuleComponent())
+        {
+            Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        }
+    }
+
     UE_LOG(LogTemp, Warning, TEXT("LEVEL COMPLETE! Final Score: %d"), CurrentScore);
 
     // Save Data
     UDSAGameInstance* GI = Cast<UDSAGameInstance>(GetGameInstance());
     if (GI)
     {
-        if (DSAManager) DSAManager->AddScore(GI->CurrentProfileName, CurrentScore);
+        // Use the level index before we increment to record where this score was achieved
+        const int32 FinishedLevelIndex = GI->CurrentLevelIndex;
+
+        if (DSAManager)
+        {
+            DSAManager->AddScore(GI->CurrentProfileName, CurrentScore, FinishedLevelIndex);
+            // Keep the GameInstance copy in sync for saving/loading
+            GI->HighScores = DSAManager->Scoreboard;
+        }
+
+        CompletedLevelIndex = FinishedLevelIndex;
 
         GI->TotalGlobalCoins += CoinsCollectedInLevel;
         GI->CurrentLevelIndex++;
@@ -114,8 +161,8 @@ void AdsaprojectGameMode::FinishLevel(AdsaprojectCharacter* Player)
                 UIInput.SetWidgetToFocus(EndWidget->TakeWidget());
                 PC->SetInputMode(UIInput);
 
-                // Pause game logic (optional, stops timer)
-                // UGameplayStatics::SetGamePaused(GetWorld(), true);
+                // Pause game logic so the player and enemies stop completely
+                UGameplayStatics::SetGamePaused(GetWorld(), true);
             }
         }
     }

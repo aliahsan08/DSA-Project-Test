@@ -8,11 +8,12 @@ UDSAManagerComponent::UDSAManagerComponent()
 
 // --- ALGORITHM: BINARY SEARCH INSERTION ---
 // "Replace BST with TArray and use binary search"
-void UDSAManagerComponent::AddScore(FString Name, int32 Score)
+void UDSAManagerComponent::AddScore(FString Name, int32 Score, int32 LevelIndex)
 {
     FLevelScore NewEntry;
     NewEntry.PlayerName = Name;
     NewEntry.Score = Score;
+    NewEntry.LevelIndex = LevelIndex;
 
     // Binary Search to find insertion index (Sorted Descending)
     // We use a Predicate to tell LowerBound how to sort

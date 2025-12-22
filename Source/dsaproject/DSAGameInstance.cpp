@@ -39,6 +39,7 @@ bool UDSAGameInstance::LoadGame(FString SlotName)
             CurrentProfileName = LoadData->PlayerName;
             CurrentLevelIndex = LoadData->CurrentLevelIndex;
             TotalGlobalCoins = LoadData->TotalCoinsCollected;
+            HighScores = LoadData->HighScores;
 
             // Logic: Load to the NEXT level (stored in save file)
             OpenNextLevel();
@@ -60,6 +61,7 @@ void UDSAGameInstance::SaveState()
 
     SaveInst->CurrentLevelIndex = SaveLevelIndex;
     SaveInst->TotalCoinsCollected = TotalGlobalCoins;
+    SaveInst->HighScores = HighScores;
 
     UGameplayStatics::SaveGameToSlot(SaveInst, CurrentProfileName, 0);
     UE_LOG(LogTemp, Warning, TEXT("Game Saved: %s at Level %d"), *CurrentProfileName, SaveLevelIndex);

@@ -22,6 +22,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Data")
         int32 TotalGlobalCoins;
 
+    // NEW: Persisted high scores for this profile (all levels)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Data")
+    TArray<FLevelScore> HighScores;
+
     // Returns FALSE if name is taken
     UFUNCTION(BlueprintCallable, Category = "SaveSystem")
         bool CreateNewGame(FString PlayerName);

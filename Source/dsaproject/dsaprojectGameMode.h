@@ -38,6 +38,13 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
         int32 CurrentScore;
 
+    // NEW: Which level was just completed (used for per-level highscores)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+        int32 CompletedLevelIndex;
+
+    // Prevents multiple finish calls and flags that gameplay should be frozen
+    bool bLevelFinished;
+
     int32 CoinsCollectedInLevel;
     float TimeElapsed;
 

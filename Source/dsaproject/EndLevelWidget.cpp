@@ -23,12 +23,31 @@ void UEndLevelWidget::NativeConstruct()
 
         if (GM->DSAManager && Txt_HighScores)
         {
-            FString ScoreList = TEXT("Top Scores:\n");
-            for (int32 i = 0; i < FMath::Min(3, GM->DSAManager->Scoreboard.Num()); i++)
+            // Filter scores for the level that was just completed
+            const int32 LevelToShow = GM->CompletedLevelIndex;
+
+            TArray<FLevelScore> Filtered;
+            for (const FLevelScore& Entry : GM->DSAManager->Scoreboard)
             {
-                FLevelScore Entry = GM->DSAManager->Scoreboard[i];
+                if (Entry.LevelIndex == LevelToShow)
+                {
+                    Filtered.Add(Entry);
+                }
+            }
+
+            FString ScoreList = TEXT("Top Scores (This Level):\n");
+            const int32 MaxToShow = FMath::Min(3, Filtered.Num());
+            for (int32 i = 0; i < MaxToShow; i++)
+            {
+                const FLevelScore& Entry = Filtered[i];
                 ScoreList += FString::Printf(TEXT("%d. %s - %d\n"), i + 1, *Entry.PlayerName, Entry.Score);
             }
+
+            if (MaxToShow == 0)
+            {
+                ScoreList += TEXT("No previous scores yet.\n");
+            }
+
             Txt_HighScores->SetText(FText::FromString(ScoreList));
         }
     }

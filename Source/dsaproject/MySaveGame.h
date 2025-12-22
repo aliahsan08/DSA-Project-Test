@@ -9,11 +9,15 @@ struct FLevelScore
 {
     GENERATED_BODY()
 
-        UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-        FString PlayerName;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    FString PlayerName;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
         int32 Score;
+
+    // NEW: Which level this score was achieved on (1-6)
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+    int32 LevelIndex;
 
     // Operator for Sorting (Descending Order)
     bool operator<(const FLevelScore& Other) const

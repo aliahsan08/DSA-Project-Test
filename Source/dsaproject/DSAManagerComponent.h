@@ -26,7 +26,8 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "DSA|Score")
         TArray<FLevelScore> Scoreboard;
 
-    void AddScore(FString PlayerName, int32 Score);
+    // Now also tracks which level the score belongs to
+    void AddScore(FString PlayerName, int32 Score, int32 LevelIndex);
 
     // --- 2. Queue (Events) ---
     TQueue<FString> EventLogQueue;
